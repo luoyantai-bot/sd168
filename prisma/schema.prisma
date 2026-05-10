@@ -1,0 +1,285 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  phone        String   @unique
+  password     String
+  nickname     String   @default("")
+  avatarUrl    String   @default("")
+  role         String   @default("buyer") // merchant, buyer, warehouse_staff, logistics_staff, super_admin
+  status       String   @default("active") // active, disabled
+  wechatOpenid String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  merchant       Merchant?
+  buyerInquiries Inquiry[]  @relation("BuyerInquiries")
+  buyerOrders    Order[]    @relation("BuyerOrders")
+  sentMessages   Message[]  @relation("SentMessages")
+}
+
+model Merchant {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  shopName          String
+  shopLogo          String   @default("")
+  contactName       String
+  contactPhone      String
+  companyName       String
+  businessLicense   String   @default("")
+  address           String   @default("")
+  mainCategories    String   @default("") // JSON array string
+  description       String   @default("")
+  factoryImages     String   @default("") // JSON array string
+  verifyStatus      String   @default("pending") // pending, approved, rejected
+  verifyNote        String   @default("")
+  isWarehouseEnabled Boolean @default(false)
+  commissionRate    Float    @default(0.05)
+  balance           Float    @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user          User        @relation(fields: [userId], references: [id])
+  products      Product[]
+  inquiries     Inquiry[]   @relation("MerchantInquiries")
+  orders        Order[]     @relation("MerchantOrders")
+  withdrawals   Withdrawal[]
+  settlements   Settlement[]
+}
+
+model Product {
+  id             String   @id @default(cuid())
+  merchantId     String
+  title          String
+  subtitle       String   @default("")
+  category       String
+  subCategory    String   @default("")
+  coverImage     String   @default("")
+  images         String   @default("") // JSON array string
+  description    String   @default("")
+  moq            Int      @default(1)
+  unit           String   @default("个")
+  priceTiers     String   @default("") // JSON array string
+  weight         Float    @default(0) // grams
+  volumeL        Float    @default(0) // cm
+  volumeW        Float    @default(0)
+  volumeH        Float    @default(0)
+  isInWarehouse  Boolean  @default(false)
+  warehouseStock Int      @default(0)
+  status         String   @default("draft") // draft, published, offline, rejected
+  rejectReason   String   @default("")
+  viewCount      Int      @default(0)
+  inquiryCount   Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  merchant   Merchant    @relation(fields: [merchantId], references: [id])
+  skus       ProductSku[]
+  inquiries  Inquiry[]
+  favorites  Favorite[]
+}
+
+model ProductSku {
+  id          String   @id @default(cuid())
+  productId   String
+  skuName     String
+  attributes  String   @default("") // JSON array string
+  price       Float
+  stock       Int      @default(0)
+  image       String   @default("")
+
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Inquiry {
+  id            String   @id @default(cuid())
+  buyerId       String
+  merchantId    String
+  productId     String
+  skuId         String?
+  quantity      Int
+  message       String   @default("")
+  needSample    Boolean  @default(false)
+  expectedDate  String?
+  status        String   @default("pending") // pending, replied, converted, closed
+  replyMessage  String   @default("")
+  quotedPrice   Float?
+  createdAt     DateTime @default(now())
+  repliedAt     DateTime?
+
+  buyer    User     @relation("BuyerInquiries", fields: [buyerId], references: [id])
+  merchant Merchant @relation("MerchantInquiries", fields: [merchantId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+}
+
+model Order {
+  id                    String   @id @default(cuid())
+  orderNo               String   @unique
+  buyerId               String
+  merchantId            String
+  inquiryId             String?
+  items                 String   @default("") // JSON array string
+  subtotal              Float    @default(0)
+  logisticsFee          Float    @default(0)
+  labelFee              Float    @default(0)
+  totalAmount           Float    @default(0)
+  commissionAmount      Float    @default(0)
+  usePlatformLogistics  Boolean  @default(false)
+  logisticsOption       String   @default("")
+  receiverName          String   @default("")
+  receiverPhone         String   @default("")
+  receiverAddress       String   @default("")
+  receiverCountry       String   @default("")
+  needWarehouse         Boolean  @default(false)
+  needLabel             Boolean  @default(false)
+  labelContent          String   @default("")
+  status                String   @default("pending_payment") // pending_payment, paid, in_warehouse, labeling, dispatched, in_transit, delivered, cancelled, refunding, refunded
+  paymentMethod         String   @default("") // wechat_pay, transfer
+  paymentTime           DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  buyer              User              @relation("BuyerOrders", fields: [buyerId], references: [id])
+  merchant           Merchant          @relation("MerchantOrders", fields: [merchantId], references: [id])
+  warehouseRecords   WarehouseRecord[]
+  logisticsOrders    LogisticsOrder[]
+  settlement         Settlement?
+}
+
+model WarehouseRecord {
+  id          String   @id @default(cuid())
+  orderId     String
+  productId   String
+  merchantId  String
+  operation   String   // inbound, label, outbound
+  quantity    Int
+  operatorId  String
+  labelFee    Float    @default(0)
+  note        String   @default("")
+  images      String   @default("") // JSON array string
+  createdAt   DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+}
+
+model LogisticsOrder {
+  id               String   @id @default(cuid())
+  orderId          String
+  trackingNo       String   @default("")
+  logisticsChannel String   @default("")
+  origin           String   @default("邵东")
+  destination      String   @default("")
+  weight           Float    @default(0)
+  volumeWeight     Float    @default(0)
+  chargeWeight     Float    @default(0)
+  freight          Float    @default(0)
+  status           String   @default("created") // created, picked_up, customs_clearance, in_transit, arrived, delivered
+  statusTimeline   String   @default("") // JSON array string
+  createdAt        DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+}
+
+model Settlement {
+  id              String   @id @default(cuid())
+  orderId         String   @unique
+  merchantId      String
+  productAmount   Float
+  commissionRate  Float
+  commissionAmount Float
+  merchantAmount  Float
+  labelFee        Float    @default(0)
+  logisticsFee    Float    @default(0)
+  status          String   @default("pending") // pending, completed
+  createdAt       DateTime @default(now())
+
+  order    Order    @relation(fields: [orderId], references: [id])
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+}
+
+model Withdrawal {
+  id          String   @id @default(cuid())
+  merchantId  String
+  amount      Float
+  method      String   @default("bank") // bank, wechat
+  bankInfo    String   @default("") // JSON string
+  status      String   @default("pending") // pending, approved, rejected, completed
+  adminNote   String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  note      String   @default("")
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  content   String
+  type      String   @default("system") // system, inquiry, order
+  isRead    Boolean  @default(false)
+  linkUrl   String   @default("")
+  createdAt DateTime @default(now())
+
+  user User @relation("SentMessages", fields: [userId], references: [id])
+}
+
+model PlatformConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
+
+model LogisticsChannel {
+  id              String   @id @default(cuid())
+  name            String
+  carrier         String   @default("")
+  deliveryDays    String   @default("")
+  billingMethod   String   @default("weight") // weight, volume
+  firstWeightPrice Float   @default(0) // per kg
+  additionalPrice Float    @default(0) // per kg
+  minWeight       Float    @default(0.5) // min chargeable weight in kg
+  destinationCountries String @default("") // JSON array string
+  isEnabled       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Banner {
+  id        String   @id @default(cuid())
+  imageUrl  String
+  linkUrl   String   @default("")
+  sort      Int      @default(0)
+  isEnabled Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Category {
+  id       String  @id @default(cuid())
+  name     String
+  slug     String  @unique
+  icon     String  @default("")
+  parentId String?
+  sort     Int     @default(0)
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+}

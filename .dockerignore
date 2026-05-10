@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+db
+upload
+skills
+agent-ctx
+examples
+mini-services
+.zscripts
+download
+*.log
+dev.log
+server.log

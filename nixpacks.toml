@@ -1,0 +1,20 @@
+{
+  "phases": {
+    "install": {
+      "cmds": [
+        "npm install"
+      ]
+    },
+    "build": {
+      "cmds": [
+        "npx prisma generate",
+        "npm run build",
+        "cp -r .next/static .next/standalone/.next/",
+        "cp -r public .next/standalone/"
+      ]
+    },
+    "start": {
+      "cmd": "npx prisma db push --accept-data-loss && node .next/standalone/server.js"
+    }
+  }
+}

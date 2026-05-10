@@ -5,15 +5,23 @@ WORKDIR /app
 
 # ---- Dependencies ----
 FROM base AS deps
+# Provide a dummy DATABASE_URL so prisma generate in postinstall won't fail
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
+
 COPY package.json bun.lock ./
+# Copy prisma schema BEFORE npm install so postinstall prisma generate can find it
+COPY prisma ./prisma
+
 RUN npm install --frozen-lockfile 2>/dev/null || npm install
 
 # ---- Build ----
 FROM base AS builder
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Generate Prisma client & Build Next.js
+# Generate Prisma client (idempotent) & Build Next.js
 RUN npx prisma generate && npm run build
 
 # ---- Production ----
@@ -38,8 +46,8 @@ COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
 # Copy and set entrypoint permissions
 COPY --from=builder /app/docker-entrypoint.sh ./
+USER root
 RUN chmod +x ./docker-entrypoint.sh
-
 USER nextjs
 
 EXPOSE 3000
